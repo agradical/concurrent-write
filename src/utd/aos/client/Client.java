@@ -172,12 +172,8 @@ public class Client implements Runnable{
 					} else {
 						allClientsSockets.put(addr.getHostName(), socketmap);
 					}
-					
-					new Thread(new ClientsServerThreadListener(socketmap)).start();
-					
-					System.out.println("Connect success: "+ip.getHostName()+"->"+addr.getHostName());
-
-					
+										
+					System.out.println("Connect success: "+ip.getHostName()+"->"+addr.getHostName());					
 					
 					break;
 			    

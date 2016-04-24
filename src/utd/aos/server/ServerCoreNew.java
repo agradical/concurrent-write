@@ -5,21 +5,29 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
 import utd.aos.utils.Message;
+import utd.aos.utils.MutexMessage;
 import utd.aos.utils.Operations;
 import utd.aos.utils.Resource;
 import utd.aos.utils.SocketMap;
+import utd.aos.utils.MutexMessage.MessageType;
 import utd.aos.utils.Operations.OperationMethod;
 import utd.aos.utils.Operations.OperationType;
 
 public class ServerCoreNew implements Server {
 	
 	public static Map<InetAddress, Integer> otherServers;
+	public static Map<String, SocketMap> allServerSockets;
+	public static Map<InetAddress, SocketMap> allClientSockets = new HashMap<InetAddress, SocketMap>();
+
 	public static InetAddress ip;
 	public static Integer port;
 
@@ -67,6 +75,7 @@ public class ServerCoreNew implements Server {
 
 	@Override
 	public void run() {		
+		init();
 		try {
 			execute(socket);
 			socket.close();
@@ -77,9 +86,7 @@ public class ServerCoreNew implements Server {
 
 	@Override
 	public void execute(Socket clientSocket) throws IOException, ClassNotFoundException {
-		
-		Map<InetAddress, SocketMap> sockets = new HashMap<InetAddress, SocketMap>();
-		
+				
 		InputStream in = clientSocket.getInputStream();
 		OutputStream out = clientSocket.getOutputStream();
 		
@@ -96,8 +103,8 @@ public class ServerCoreNew implements Server {
 			} catch (Exception e) {
 				//Closing connection with other servers in case of termination from client
 				System.out.println("--Closing connection--");
-				if(!sockets.isEmpty()) {
-					for (Map.Entry<InetAddress, SocketMap> entry : sockets.entrySet()) {
+				if(!allClientSockets.isEmpty()) {
+					for (Map.Entry<InetAddress, SocketMap> entry : allClientSockets.entrySet()) {
 						entry.getValue().getO_out().close();
 					}
 				}
@@ -131,8 +138,8 @@ public class ServerCoreNew implements Server {
 					o_out.writeObject(m);
 
 					in.close();
-					if(!sockets.isEmpty()) {
-						for (Map.Entry<InetAddress, SocketMap> entry : sockets.entrySet()) {
+					if(!allClientSockets.isEmpty()) {
+						for (Map.Entry<InetAddress, SocketMap> entry : allClientSockets.entrySet()) {
 							entry.getValue().getO_out().close();
 						}
 					}
@@ -156,7 +163,7 @@ public class ServerCoreNew implements Server {
 				
 				//Operation can be either to perform locally or signal to commit
 				//after performed on every server
-				if (operation.getType().equals(OperationType.REQUEST)) {
+				if(operation.getType().equals(OperationType.REQUEST)) {
 					
 					System.out.println(operation.getOperation().toString()+ " Request");
 					
@@ -165,17 +172,15 @@ public class ServerCoreNew implements Server {
 					perform_message = operation.perform(this.getDATADIRECTORY(), inputResource);			
 					
 					if (perform_message.getStatusCode() == 200) {
-						if(operation.getOperation().equals(OperationMethod.READ)) {
-							perform_message.setServerId(ip.getHostName());
-							o_out.writeObject(perform_message);
-							continue;
-						}
 						
 						//Checking if the server is connected with client
 						//If connected with client this server will be responsible to sync the operation.
 						//So creating connections with other servers
-						if(!otherServers.containsKey(clientSocket.getInetAddress())) {										
-							if(sockets.isEmpty()) {
+						if(!otherServers.containsKey(clientSocket.getInetAddress())) {
+							
+							handleClientRequest(operation);
+							
+							if(allClientSockets.isEmpty()) {
 								for (Map.Entry<InetAddress, Integer> entry : otherServers.entrySet()) {						
 									Socket socket = new Socket(entry.getKey(), entry.getValue());
 
@@ -185,14 +190,13 @@ public class ServerCoreNew implements Server {
 									InputStream sock_in = socket.getInputStream();
 									ObjectInputStream sock_o_in = new ObjectInputStream(sock_in);
 
-									sockets.put(entry.getKey(), new SocketMap(socket, sock_o_out, sock_o_in));
+									allClientSockets.put(entry.getKey(), new SocketMap(socket, sock_o_out, sock_o_in));
 								}
 							}
 							
 							//Attempt to synchronize the operation
-							
 							Message sync_message  = null;
-							for (Map.Entry<InetAddress, SocketMap> entry : sockets.entrySet()) {
+							for (Map.Entry<InetAddress, SocketMap> entry : allClientSockets.entrySet()) {
 								sync_message = synchronize(operation, entry.getValue().getO_in(), entry.getValue().getO_out());
 								if(sync_message.getStatusCode() != 200) {
 									sync_status = false;
@@ -208,7 +212,7 @@ public class ServerCoreNew implements Server {
 								Operations commit_op = new Operations();
 								commit_op.setType(OperationType.COMMIT);
 								
-								for (Map.Entry<InetAddress, SocketMap> entry : sockets.entrySet()) {						
+								for (Map.Entry<InetAddress, SocketMap> entry : allClientSockets.entrySet()) {						
 									sync_message = synchronize(commit_op, entry.getValue().getO_in(), entry.getValue().getO_out());
 									if(sync_message.getStatusCode() != 200) {
 										sync_status = false;
@@ -260,6 +264,61 @@ public class ServerCoreNew implements Server {
 			}
 		}
 	}
+
+	
+	public void init() {
+		
+		//Check for all clients to be started
+		for(Map.Entry<InetAddress, Integer> entry: otherServers.entrySet()) {
+			InetAddress addr = entry.getKey();
+			while(true) {
+			    try {	    	
+					Socket socket = new Socket(addr.getHostName(), entry.getValue());
+					InputStream in = socket.getInputStream();
+					OutputStream out = socket.getOutputStream();
+
+					ObjectInputStream o_in = new ObjectInputStream(in);
+					ObjectOutputStream o_out = new ObjectOutputStream(out);
+					
+					System.out.println("--Saving streams--");
+					
+					MutexMessage testmessage = new MutexMessage();
+					testmessage.setId(1);
+					testmessage.setType(MessageType.TEST);
+					o_out.writeObject(testmessage);
+
+					InetSocketAddress sock_addr = new InetSocketAddress(addr, entry.getValue());
+					SocketMap socketmap = new SocketMap(socket, o_out, o_in, sock_addr);
+					
+					if(allServerSockets == null) {
+						allServerSockets = new HashMap<String, SocketMap>();
+						allServerSockets.put(addr.getHostName(), socketmap);
+					} else {
+						allServerSockets.put(addr.getHostName(), socketmap);
+					}
+										
+					System.out.println("Connect success: "+ip.getHostName()+"->"+addr.getHostName());					
+					
+					break;
+			    
+			    } catch(ConnectException e) {
+			    	System.out.println("Connect failed, waiting and trying again: "+ip.getHostName()+"->"+addr.getHostName());
+			        try {
+			            Thread.sleep(1000);
+			        }
+			        catch(InterruptedException ie) {
+			            ie.printStackTrace();
+			        }
+			    } catch (UnknownHostException e) {
+					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
+				} 
+			}
+		}
+
+	}
+
 
 	public Message handleClientRequest(Operations operation) {
 		

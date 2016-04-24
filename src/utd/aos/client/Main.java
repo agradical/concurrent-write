@@ -96,28 +96,6 @@ public class Main {
 			System.exit(1);
 		}
 		
-
-		String client_quorum_filename = "client_quorum.list";
-		File client_quorum_file = new File(client_quorum_filename);
-		
-		if(client_quorum_file.exists()) {
-			BufferedReader cq_br = new BufferedReader(new FileReader(client_quorum_file));
-			String _client_quorum = "";
-			while((_client_quorum = cq_br.readLine()) != null) {
-				String ids[] = _client_quorum.split(" ");
-				if(Client.id == Integer.parseInt(ids[0])) {
-					String quorum_client_ids[] = ids[1].split(",");
-					for(String quorum_client_id: quorum_client_ids) {
-						if(Integer.parseInt(quorum_client_id) != Client.id) {
-							InetSocketAddress addr = client_map.get(Integer.parseInt(quorum_client_id));
-							SocketMap socketmap = new SocketMap(addr);
-							
-						}
-					}
-				}
-			}
-			cq_br.close();
-		}
 		
 			
 		try {
@@ -206,6 +184,7 @@ public class Main {
 				while(true) {
 					try {
 						Socket socket = clientServerSocket.accept();
+						exec.submit(new ClientsClientThreadListener(socket));
 					} catch(Exception e) {
 						break;
 					}
