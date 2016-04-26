@@ -1,5 +1,6 @@
 package utd.aos.utils;
 
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetSocketAddress;
@@ -12,10 +13,15 @@ public class SocketMap {
 	ObjectOutputStream o_out;
 	ObjectInputStream o_in;
 	
-	public SocketMap(Socket socket, ObjectOutputStream o_out, ObjectInputStream o_in) {
+	public SocketMap(Socket socket) {
 		this.socket = socket;
-		this.o_in = o_in;
-		this.o_out = o_out;
+		try {
+			this.o_out = new ObjectOutputStream(socket.getOutputStream());
+			this.o_in = new ObjectInputStream(socket.getInputStream());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	public SocketMap(Socket socket, ObjectOutputStream o_out, ObjectInputStream o_in, InetSocketAddress addr) {

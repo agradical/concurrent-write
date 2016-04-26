@@ -2,14 +2,14 @@ package utd.aos.utils;
 
 import java.io.Serializable;
 
-public class SimpleMessage implements Serializable {
+public class SimpleControl implements Serializable {
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = -5492385140694252853L;
 
 	public static enum Type {
-		REQUEST, COMMIT, AGREED, COMMIT_REQUEST, ACK
+		DATA, REQUEST, COMMIT, AGREED, COMMIT_REQUEST, ACK
 	}
 	
 	private Type type;
@@ -17,11 +17,19 @@ public class SimpleMessage implements Serializable {
 	private int writeNum;
 	private String hostName;
 	
-	public SimpleMessage(Type type, int clientId, int writeNum, String hostName) {
+	public SimpleControl(Type type, int clientId, int writeNum, String hostName) {
 		this.type = type;
 		this.clientId = clientId;
 		this.writeNum = writeNum;
 		this.hostName = hostName;
+	}
+	
+	// Copy constructor
+	public SimpleControl(SimpleControl that) {
+		this.type = that.type;
+		this.clientId = that.clientId;
+		this.writeNum = that.writeNum;
+		this.hostName = that.hostName;
 	}
 
 	public Type getType() {
@@ -39,17 +47,16 @@ public class SimpleMessage implements Serializable {
 	public void setWriteNum(int writeNum) {
 		this.writeNum = writeNum;
 	}
-
-	public static long getSerialversionuid() {
-		return serialVersionUID;
+	
+	public String getHostName() {
+		return this.hostName;
 	}
-
+	
 	public int getClientId() {
 		return clientId;
 	}
-
-	public String getHostName() {
-		return hostName;
-	}	
 	
+	public String getKey() {
+		return this.clientId + "_" + this.writeNum;
+	}
 }

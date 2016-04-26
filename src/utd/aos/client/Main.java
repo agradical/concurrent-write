@@ -1,18 +1,15 @@
 package utd.aos.client;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import utd.aos.utils.SimpleMessage;
-import utd.aos.utils.SimpleMessage.Type;
+import utd.aos.utils.ConfigurationUtils;
+import utd.aos.utils.SharedInfo;
+import utd.aos.utils.SimpleControl;
+import utd.aos.utils.SimpleControl.Type;
 import utd.aos.utils.SocketMap;
 
 public class Main {
@@ -21,39 +18,38 @@ public class Main {
 	private static final int RANGE_START = 10;
 	private static final int RANGE_END = 50;
 	private static final int NUM_OF_SERVERS = 3;
-
+	
 	public static void main (String[] args) throws Exception {
+		if (args.length < 1) {
+			System.err.println("java Main <client_id>");
+			System.exit(-1);
+		}
+		
+		int my_id = Integer.parseInt(args[0]);
 		
 		//Server configuration
 		String filename = "server.list";
-		File file = new File(filename);
-		List<SocketMap> sConnections = new ArrayList<SocketMap>();
+		List<SocketMap> sConnections = new ArrayList<SocketMap>();		
+		ConfigurationUtils.setupConnections(filename, sConnections);
 		
-		if(file.exists()) {
-			BufferedReader br = new BufferedReader(new FileReader(file));
-			String server = "";
-			while((server = br.readLine()) != null) {
-				String[] params = server.split(" ");
-				
-				// Create sockets and keep them alive
-				// through the application lifetime
-				try {
-					Socket sock = new Socket(params[0],
-							Integer.parseInt(params[1]));
-					ObjectOutputStream oos = new ObjectOutputStream(sock.getOutputStream());
-					ObjectInputStream ois = new ObjectInputStream(sock.getInputStream());
-					SocketMap sMap = new SocketMap(sock, oos, ois);
-					
-					sConnections.add(sMap);
-				} catch (SocketException se) {
-					se.printStackTrace();
-				}
+		// client configurations
+		filename = "client_id.list";
+		String statsFile = "stats" + my_id + ".log";
+		SharedInfo sharedInfo = new SharedInfo(statsFile,my_id);
+		ConfigurationUtils.setupPeers(my_id, sharedInfo, filename);
+		
+		// start client server
+		new Thread(new ClientServer(sharedInfo)).start();
+		
+		// wait till all clients are up
+		while (!arePeersUp(sharedInfo)) {
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException ie) {
+				// Do nothing
 			}
-			br.close();
-		} else {
-			System.err.println("Server configuration file not found");
-		}
-		
+		}			
+				
 		int numOfWrites = 0;
 		
 		while (numOfWrites < NUM_OF_WRITES) {
@@ -67,21 +63,39 @@ public class Main {
 				// get a server conn by random
 				SocketMap sMap = sConnections.get(serverNum - 1);
 
-				SimpleMessage message = new SimpleMessage(Type.REQUEST, 
+				SimpleControl message = new SimpleControl(Type.DATA, 
 						Integer.parseInt(args[0]), numOfWrites, 
 						InetAddress.getLocalHost().getHostName());
 				
 				sMap.getO_out().writeObject(message);
-				sMap.getO_out().flush();
 				
-				System.out.println((String)sMap.getO_in().readObject());
+				// TODO: Have to wait for ACK from leader
+				sMap.getO_in().readObject();
+				System.out.println(numOfWrites);
 				
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 			numOfWrites++;
 		}
-		
+	}
+
+	private static boolean arePeersUp(SharedInfo sharedInfo) {
+		for (SharedInfo.ConnInfo info : sharedInfo.getConnections()) {
+			if (info.getSockMap() == null) {
+				// try to connect;
+				try {
+					Socket sock = new Socket(info.getPeerConfig().getHost(),
+							info.getPeerConfig().getPort());
+					info.setSockMap(new SocketMap(sock));
+				} catch (UnknownHostException e) {
+					return false;
+				} catch (IOException e) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	private static int getRandom(int rangeStart, int rangeEnd) {
