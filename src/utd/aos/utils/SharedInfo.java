@@ -18,6 +18,9 @@ public class SharedInfo {
 	
 	private ConcurrentMap<String, SimpleControl> map; 
 	
+	//Only to be used by leader in order to maintain consistency	
+	private boolean pendingCommitAck;
+	
 	private List<ConnInfo> connections;
 	
 	public SharedInfo (String filename,
@@ -27,6 +30,7 @@ public class SharedInfo {
 		this.isLeader = (LEADER_ID == myId);
 		this.map = new ConcurrentHashMap<String, SimpleControl>();
 		this.connections = new ArrayList<ConnInfo>();
+		this.pendingCommitAck = false;
 	}
 	
 	public static class ConnInfo {
@@ -87,4 +91,13 @@ public class SharedInfo {
 	public SimpleControl getMessage(String key) {		
 		return map.get(key);
 	}
+
+	public boolean isPendingCommitAck() {
+		return pendingCommitAck;
+	}
+
+	public void setPendingCommitAck(boolean pendingCommitAck) {
+		this.pendingCommitAck = pendingCommitAck;
+	}
+
 }

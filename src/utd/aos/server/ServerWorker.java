@@ -17,6 +17,7 @@ public class ServerWorker implements Runnable {
 	public ServerWorker() {
 		
 	}
+	
 	public ServerWorker(Socket socket, SharedInfo info) {
 		clientSock = new SocketMap(socket);
 		
@@ -53,6 +54,9 @@ public class ServerWorker implements Runnable {
 				break;
 			case COMMIT_REQUEST:
 				processCommitRequest(message);
+				break;
+			case COMMIT:
+				performCommit(message);
 				break;
 			case ACK:
 				processAck(message);
@@ -106,8 +110,7 @@ public class ServerWorker implements Runnable {
 		// if all have agreed, send commit request to peers 
 		if (allAgreed) {
 			if (sharedInfo.isLeader()) {
-				performCommit(message);
-				// TODO: send commit to non-leaders
+				processCommitRequest(message);
 			} else {
 				SimpleControl commitReq = new SimpleControl(message);
 				commitReq.setType(Type.COMMIT_REQUEST);
@@ -116,13 +119,22 @@ public class ServerWorker implements Runnable {
 		} else {
 			// TODO: handle this unhappy case
 		}
-
+		
+		while(sharedInfo.getMessage(message.getKey()) != null) {
+			try {
+				Thread.sleep(5);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 		
 		try {
 			clientSock.getO_out().writeObject(message);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		
 	}
 	
 	/*
@@ -175,14 +187,66 @@ public class ServerWorker implements Runnable {
 	 * Called for only leader
 	 */
 	private void processCommitRequest(SimpleControl message) {
+		
+		while(sharedInfo.isPendingCommitAck()) {
+			try {
+				Thread.sleep(5);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		sharedInfo.setPendingCommitAck(true);
 		performCommit(message);
-		//TODO: send COMMIT to NON-LEADERS
+		broadcastCommit(message);
+		sharedInfo.setPendingCommitAck(false);
+		
 	}
 	
 	private void performCommit(SimpleControl message) {
+		
 		SimpleControl data = sharedInfo.getMessage(message.getKey());
 		sharedInfo.getFileIO().write(data);
 		sharedInfo.removeMessageFromBuffer(message.getKey());
+		
+		//if NON-LEADER return ACK to leader
+		if(!sharedInfo.isLeader()) {	
+			SimpleControl newMessage = new SimpleControl(message);
+			newMessage.setType(Type.ACK);
+			try {
+				clientSock.getO_out().writeObject(newMessage);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	private boolean broadcastCommit(SimpleControl message) {
+				
+		SimpleControl newMessage = new SimpleControl(message);
+		newMessage.setType(Type.COMMIT);
+		
+		boolean allAcks = true;
+		
+		for (ConnInfo conn : sharedInfo.getConnections()) {
+			try {
+				SimpleControl ack = sendReceive(newMessage, conn);
+				if(!ack.getType().equals(Type.ACK)) {
+					allAcks = false;
+				}
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				allAcks = false;
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				allAcks = false;
+				e.printStackTrace();
+			}
+		}
+				
+		return allAcks;
 	}
 	
 	private void processAck(SimpleControl message) {
