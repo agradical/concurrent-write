@@ -57,6 +57,7 @@ public class Main {
 		}			
 				
 		int numOfWrites = 0;
+		int totalNumOfmessages = 0;
 		
 		while (numOfWrites < NUM_OF_WRITES) {
 			try {
@@ -95,6 +96,12 @@ public class Main {
 						+"TIME: "+(endTime-startTime)+"\n"
 						+"-------------------------------\n";
 				
+				totalNumOfmessages += reply.getRequestCount()
+						+reply.getAgreedCount()
+						+reply.getCommitrequestCount()
+						+reply.getCommitCount()
+						+reply.getAckCount();
+				
 				//System.out.println(text);
 				
 				writer.write(text);
@@ -107,6 +114,9 @@ public class Main {
 			}
 			numOfWrites++;
 		}
+		
+		String text = "\n\nTOTAL MESSAGES: "+ totalNumOfmessages+"\n\n";
+		writer.write(text);
 		
 		writer.close();
 	}
