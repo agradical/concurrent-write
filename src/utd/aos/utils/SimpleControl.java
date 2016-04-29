@@ -17,11 +17,23 @@ public class SimpleControl implements Serializable {
 	private int writeNum;
 	private String hostName;
 	
+	private int requestCount;
+	private int commitCount;
+	private int agreedCount;
+	private int commitrequestCount;
+	private int ackCount;
+	
 	public SimpleControl(Type type, int clientId, int writeNum, String hostName) {
 		this.type = type;
 		this.clientId = clientId;
 		this.writeNum = writeNum;
 		this.hostName = hostName;
+	
+		this.requestCount = 0;
+		this.agreedCount = 0;
+		this.commitCount = 0;
+		this.commitrequestCount = 0;
+		this.ackCount = 0;
 	}
 	
 	// Copy constructor
@@ -30,6 +42,12 @@ public class SimpleControl implements Serializable {
 		this.clientId = that.clientId;
 		this.writeNum = that.writeNum;
 		this.hostName = that.hostName;
+		
+		this.requestCount = that.requestCount;
+		this.agreedCount = that.agreedCount;
+		this.commitCount = that.commitCount;
+		this.commitrequestCount = that.commitrequestCount;
+		this.ackCount = that.ackCount;
 	}
 
 	public Type getType() {
@@ -58,5 +76,45 @@ public class SimpleControl implements Serializable {
 	
 	public String getKey() {
 		return this.clientId + "_" + this.writeNum;
+	}
+
+	public int getRequestCount() {
+		return requestCount;
+	}
+
+	public void incrRequestCount() {
+		this.requestCount++;
+	}
+
+	public int getCommitCount() {
+		return commitCount;
+	}
+
+	public void incrCommitCount() {
+		this.commitCount++;
+	}
+
+	public int getAgreedCount() {
+		return agreedCount;
+	}
+
+	public void incrAgreedCount() {
+		this.agreedCount++;
+	}
+
+	public int getCommitrequestCount() {
+		return commitrequestCount;
+	}
+
+	public void incrCommitrequestCount() {
+		this.commitrequestCount++;
+	}
+
+	public int getAckCount() {
+		return ackCount;
+	}
+
+	public void incrAckCount() {
+		this.ackCount++;
 	}
 }

@@ -18,7 +18,6 @@ public class ConfigurationUtils {
 				String server = "";
 				while((server = br.readLine()) != null) {
 					String[] params = server.split(" ");
-					
 					// Create sockets and keep them alive
 					// through the application lifetime
 					try {

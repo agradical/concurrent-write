@@ -1,4 +1,6 @@
 package utd.aos.client;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
@@ -19,6 +21,9 @@ public class Main {
 	private static final int RANGE_END = 50;
 	private static final int NUM_OF_SERVERS = 3;
 	
+	public static boolean ackReceived = false;
+	public static SimpleControl reply;
+	
 	public static void main (String[] args) throws Exception {
 		if (args.length < 1) {
 			System.err.println("java Main <client_id>");
@@ -38,6 +43,7 @@ public class Main {
 		SharedInfo sharedInfo = new SharedInfo(statsFile,my_id);
 		ConfigurationUtils.setupPeers(my_id, sharedInfo, filename);
 		
+		BufferedWriter writer = new BufferedWriter (new FileWriter(statsFile));
 		// start client server
 		new Thread(new ClientServer(sharedInfo)).start();
 		
@@ -67,17 +73,42 @@ public class Main {
 						Integer.parseInt(args[0]), numOfWrites, 
 						InetAddress.getLocalHost().getHostName());
 				
+				long startTime = System.currentTimeMillis();
 				sMap.getO_out().writeObject(message);
 				
+				while(!ackReceived) {
+					Thread.sleep(5);
+				}
+				ackReceived = false;
 				// TODO: Have to wait for ACK from leader
-				sMap.getO_in().readObject();
+				//SimpleControl reply = (SimpleControl)sMap.getO_in().readObject();
+				
+				reply.incrAckCount();
+				long endTime = System.currentTimeMillis();
+				
+				String text = "\t Request No.: "+(numOfWrites+1)+"\n"
+						+"REQUEST: "+reply.getRequestCount()+"\n"
+						+"AGREED: "+reply.getAgreedCount()+"\n"
+						+"COMMIT REQUEST: "+reply.getCommitrequestCount()+"\n"
+						+"COMMIT: "+reply.getCommitCount()+"\n"
+						+"ACK: "+reply.getAckCount()+"\n"
+						+"TIME: "+(endTime-startTime)+"\n"
+						+"-------------------------------\n";
+				
+				//System.out.println(text);
+				
+				writer.write(text);
+				
 				System.out.println(numOfWrites);
+				
 				
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 			numOfWrites++;
 		}
+		
+		writer.close();
 	}
 
 	private static boolean arePeersUp(SharedInfo sharedInfo) {

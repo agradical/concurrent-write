@@ -22,7 +22,7 @@ public class SharedInfo {
 	private boolean pendingCommitAck;
 	
 	private List<ConnInfo> connections;
-	
+		
 	public SharedInfo (String filename,
 			int myId) {
 		this.fileIO = new FileIO(filename);

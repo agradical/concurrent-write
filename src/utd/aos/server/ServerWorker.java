@@ -3,6 +3,10 @@ package utd.aos.server;
 import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
+
+import utd.aos.utils.ConfigurationUtils;
 import utd.aos.utils.SharedInfo;
 import utd.aos.utils.SharedInfo.ConnInfo;
 import utd.aos.utils.SimpleControl;
@@ -13,6 +17,8 @@ public class ServerWorker implements Runnable {
 	
 	private SocketMap clientSock;
 	private SharedInfo sharedInfo;
+	
+	public static List<SocketMap> clientConnections;
 	
 	public ServerWorker() {
 		
@@ -30,9 +36,7 @@ public class ServerWorker implements Runnable {
 		ServerWorker.setup(this.sharedInfo);			
 		while (true) {
 			try {					
-				SimpleControl message = (SimpleControl)clientSock.getO_in().readObject();
-				//System.out.println(message.getClientId() + ": " + message.getWriteNum());
-				
+				SimpleControl message = (SimpleControl)clientSock.getO_in().readObject();				
 				processMessage(message);
 				
 			} catch (EOFException eofe) {
@@ -88,16 +92,21 @@ public class ServerWorker implements Runnable {
 	
 	private void processData(SimpleControl message) {
 		// put the message in the buffer
-		sharedInfo.bufferMessage(message);
+		message.incrRequestCount();
+		sharedInfo.bufferMessage(message);		
 		
 		boolean allAgreed = true;
 		SimpleControl newMessage = new SimpleControl(message);
 		newMessage.setType(Type.REQUEST);
 		for (ConnInfo conn : sharedInfo.getConnections()) {
 			try {
+				message.incrRequestCount();
 				SimpleControl reply = sendReceive(newMessage, conn);				
-				if (!reply.getType().equals(Type.AGREED))
+				if (!reply.getType().equals(Type.AGREED)) {
 					allAgreed = false;
+				} else {
+					message.incrAgreedCount();
+				}
 			} catch (IOException e) {
 				allAgreed = false;
 				e.printStackTrace();
@@ -112,6 +121,7 @@ public class ServerWorker implements Runnable {
 			if (sharedInfo.isLeader()) {
 				processCommitRequest(message);
 			} else {
+				message.incrCommitrequestCount();
 				SimpleControl commitReq = new SimpleControl(message);
 				commitReq.setType(Type.COMMIT_REQUEST);
 				sendMessage(commitReq, SharedInfo.LEADER_ID);
@@ -128,6 +138,7 @@ public class ServerWorker implements Runnable {
 				e.printStackTrace();
 			}
 		}
+		
 		
 		try {
 			clientSock.getO_out().writeObject(message);
@@ -202,16 +213,26 @@ public class ServerWorker implements Runnable {
 		broadcastCommit(message);
 		sharedInfo.setPendingCommitAck(false);
 		
+		//Setup connections to client only for leader and only once
+		if(sharedInfo.isLeader() && clientConnections == null) {
+			setupClients();
+		}
+		
+		if(sharedInfo.isLeader()) {
+			returnAck(message);
+		}
 	}
 	
 	private void performCommit(SimpleControl message) {
 		
 		SimpleControl data = sharedInfo.getMessage(message.getKey());
 		sharedInfo.getFileIO().write(data);
+
 		sharedInfo.removeMessageFromBuffer(message.getKey());
 		
 		//if NON-LEADER return ACK to leader
 		if(!sharedInfo.isLeader()) {	
+			message.incrAckCount();
 			SimpleControl newMessage = new SimpleControl(message);
 			newMessage.setType(Type.ACK);
 			try {
@@ -231,9 +252,12 @@ public class ServerWorker implements Runnable {
 		
 		for (ConnInfo conn : sharedInfo.getConnections()) {
 			try {
+				message.incrCommitCount();
 				SimpleControl ack = sendReceive(newMessage, conn);
 				if(!ack.getType().equals(Type.ACK)) {
 					allAcks = false;
+				} else {
+					message.incrAckCount();
 				}
 			} catch (ClassNotFoundException e) {
 				// TODO Auto-generated catch block
@@ -245,7 +269,7 @@ public class ServerWorker implements Runnable {
 				e.printStackTrace();
 			}
 		}
-				
+		
 		return allAcks;
 	}
 	
@@ -254,4 +278,26 @@ public class ServerWorker implements Runnable {
 		
 	}
 	
+	public static synchronized void setupClients() {
+		if(clientConnections == null) {
+
+			String filename = "client_id.list";
+			clientConnections = new ArrayList<SocketMap>();
+			
+			ConfigurationUtils.setupConnections(filename, clientConnections);
+		}
+	}
+	
+	private void returnAck(SimpleControl message) {
+		int client_id = message.getClientId();
+		SimpleControl newMessage = new SimpleControl(message);
+		newMessage.setType(Type.ACK);
+
+		try {
+			clientConnections.get(client_id-1).getO_out().writeObject(newMessage);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 }

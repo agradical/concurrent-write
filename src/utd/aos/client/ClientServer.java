@@ -27,7 +27,7 @@ public class ClientServer implements Runnable {
 			while(true) {
 				try {
 				Socket socket = serverSocket.accept();
-				exec.submit(new ClientWorker(socket, sharedInfo));
+				exec.submit(new ClientWorker(socket));
 				} catch(Exception e) {
 					break;
 				}
