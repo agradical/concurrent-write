@@ -71,9 +71,6 @@ public class ServerWorker implements Runnable {
 			case COMMIT:
 				performCommit(message);
 				break;
-			case ACK:
-				processAck(message);
-				break;
 			case TERM:
 				sharedInfo.terminate();
 				break;
@@ -141,22 +138,6 @@ public class ServerWorker implements Runnable {
 		} else {
 			// TODO: handle this unhappy case
 		}
-		/*
-		while(sharedInfo.getMessage(message.getKey()) != null) {
-			try {
-				Thread.sleep(5);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		
-		
-		try {
-			clientSock.getO_out().writeObject(message);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}*/
 		
 	}
 	
@@ -210,20 +191,23 @@ public class ServerWorker implements Runnable {
 	 * Called for only leader
 	 */
 	private void processCommitRequest(SimpleControl message) {
-		
+		/*
 		while(sharedInfo.isPendingCommitAck()) {
 			try {
 				Thread.sleep(5);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 		
 		sharedInfo.setPendingCommitAck(true);
-		performCommit(message);
-		broadcastCommit(message);
-		sharedInfo.setPendingCommitAck(false);
+		*/
+		synchronized (sharedInfo.sharedLock) {
+			performCommit(message);
+			broadcastCommit(message);			
+		}
+		/*
+		sharedInfo.setPendingCommitAck(false);*/
 		
 		if(sharedInfo.isLeader()) {
 			returnAck(message);
@@ -267,22 +251,15 @@ public class ServerWorker implements Runnable {
 					message.incrAckCount();
 				}
 			} catch (ClassNotFoundException e) {
-				// TODO Auto-generated catch block
 				allAcks = false;
 				e.printStackTrace();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				allAcks = false;
 				e.printStackTrace();
 			}
 		}
 		
 		return allAcks;
-	}
-	
-	private void processAck(SimpleControl message) {
-		// TODO Auto-generated method stub
-		
 	}
 	
 	public static synchronized void setupClients() {
@@ -307,7 +284,6 @@ public class ServerWorker implements Runnable {
 				sharedInfo.incClientsFinihed();;
 			}
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}

@@ -23,6 +23,8 @@ public class SharedInfo {
 	//Only to be used by leader in order to maintain consistency	
 	private boolean pendingCommitAck;
 	
+	public Object sharedLock = new Object(); 
+	
 	private List<ConnInfo> connections;
 		
 	public SharedInfo (String filename,
