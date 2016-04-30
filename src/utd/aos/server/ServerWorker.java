@@ -3,6 +3,7 @@ package utd.aos.server;
 import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,7 +20,7 @@ public class ServerWorker implements Runnable {
 	private SharedInfo sharedInfo;
 	
 	public static List<SocketMap> clientConnections;
-	
+		
 	public ServerWorker() {
 		
 	}
@@ -33,15 +34,23 @@ public class ServerWorker implements Runnable {
 	@Override
 	public void run() {
 		// setup peer connections, one time
-		ServerWorker.setup(this.sharedInfo);			
-		while (true) {
-			try {					
+		ServerWorker.setup(this.sharedInfo);
+		
+		while (!sharedInfo.doTerminate()) {
+			try {
 				SimpleControl message = (SimpleControl)clientSock.getO_in().readObject();				
 				processMessage(message);
 				
+				//Setup connections to client only for leader and only once
+				if(sharedInfo.isLeader() && clientConnections == null) {
+					setupClients();
+				}
+				
 			} catch (EOFException eofe) {
 				break;
-			} catch (IOException | ClassNotFoundException ioe) {
+			} catch (SocketException soe) {
+				break;
+			}catch (IOException | ClassNotFoundException ioe) {
 				ioe.printStackTrace();
 			}
 		}				
@@ -65,11 +74,14 @@ public class ServerWorker implements Runnable {
 			case ACK:
 				processAck(message);
 				break;
+			case TERM:
+				sharedInfo.terminate();
+				break;
 			default:
 				break;
 		}
 	}
-	
+
 	/*
 	 * Setup connections with peers
 	 */
@@ -129,7 +141,7 @@ public class ServerWorker implements Runnable {
 		} else {
 			// TODO: handle this unhappy case
 		}
-		
+		/*
 		while(sharedInfo.getMessage(message.getKey()) != null) {
 			try {
 				Thread.sleep(5);
@@ -144,7 +156,7 @@ public class ServerWorker implements Runnable {
 			clientSock.getO_out().writeObject(message);
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
+		}*/
 		
 	}
 	
@@ -212,11 +224,6 @@ public class ServerWorker implements Runnable {
 		performCommit(message);
 		broadcastCommit(message);
 		sharedInfo.setPendingCommitAck(false);
-		
-		//Setup connections to client only for leader and only once
-		if(sharedInfo.isLeader() && clientConnections == null) {
-			setupClients();
-		}
 		
 		if(sharedInfo.isLeader()) {
 			returnAck(message);
@@ -295,6 +302,10 @@ public class ServerWorker implements Runnable {
 
 		try {
 			clientConnections.get(client_id-1).getO_out().writeObject(newMessage);
+			if (message.getWriteNum() == 39) {
+				clientConnections.get(client_id - 1).getSocket().close();
+				sharedInfo.incClientsFinihed();;
+			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

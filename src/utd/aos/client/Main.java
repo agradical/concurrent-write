@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Random;
 import utd.aos.utils.ConfigurationUtils;
 import utd.aos.utils.SharedInfo;
+import utd.aos.utils.SharedInfo.ConnInfo;
 import utd.aos.utils.SimpleControl;
 import utd.aos.utils.SimpleControl.Type;
 import utd.aos.utils.SocketMap;
@@ -45,7 +46,9 @@ public class Main {
 		
 		BufferedWriter writer = new BufferedWriter (new FileWriter(statsFile));
 		// start client server
-		new Thread(new ClientServer(sharedInfo)).start();
+		ClientServer cServer = new ClientServer(sharedInfo);
+		Thread server_t = new Thread(cServer);
+		server_t.start();
 		
 		// wait till all clients are up
 		while (!arePeersUp(sharedInfo)) {
@@ -80,12 +83,10 @@ public class Main {
 				while(!ackReceived) {
 					Thread.sleep(5);
 				}
+				long endTime = System.currentTimeMillis();
 				ackReceived = false;
-				// TODO: Have to wait for ACK from leader
-				//SimpleControl reply = (SimpleControl)sMap.getO_in().readObject();
 				
 				reply.incrAckCount();
-				long endTime = System.currentTimeMillis();
 				
 				String text = "\t Request No.: "+(numOfWrites+1)+"\n"
 						+"REQUEST: "+reply.getRequestCount()+"\n"
@@ -119,6 +120,15 @@ public class Main {
 		writer.write(text);
 		
 		writer.close();
+		cServer.stop();
+		
+		// close all peer connections
+		List<ConnInfo> clientConnections = sharedInfo.getConnections();
+		for (ConnInfo connInfo : clientConnections) {
+			connInfo.getSockMap().getSocket().close();
+		}
+		
+		server_t.join();
 	}
 
 	private static boolean arePeersUp(SharedInfo sharedInfo) {

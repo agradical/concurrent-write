@@ -15,6 +15,8 @@ public class SharedInfo {
 	private FileIO fileIO;
 	private int myId;
 	private int myPort;
+	private int clientsFinihed;
+	private boolean doTerminate;
 	
 	private ConcurrentMap<String, SimpleControl> map; 
 	
@@ -31,6 +33,8 @@ public class SharedInfo {
 		this.map = new ConcurrentHashMap<String, SimpleControl>();
 		this.connections = new ArrayList<ConnInfo>();
 		this.pendingCommitAck = false;
+		this.clientsFinihed = 0;
+		this.doTerminate = false;
 	}
 	
 	public static class ConnInfo {
@@ -100,4 +104,19 @@ public class SharedInfo {
 		this.pendingCommitAck = pendingCommitAck;
 	}
 
+	public int getClientsFinihed() {
+		return clientsFinihed;
+	}
+
+	public synchronized void incClientsFinihed() {
+		this.clientsFinihed++;
+	}
+
+	public synchronized void terminate() {
+		this.doTerminate = true;
+	}
+	
+	public boolean doTerminate() {
+		return this.doTerminate;
+	}
 }

@@ -1,5 +1,6 @@
 package utd.aos.client;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 
@@ -18,7 +19,6 @@ public class ClientWorker implements Runnable {
 	
 	@Override
 	public void run() {
-		// TODO: handle ACKs
 		while(true) {
 			try {
 				SimpleControl message = (SimpleControl)clientSock.getO_in().readObject();
@@ -26,11 +26,11 @@ public class ClientWorker implements Runnable {
 					Main.ackReceived = true;
 					Main.reply = message;
 				}
+			} catch (EOFException eof) {
+				break;
 			} catch (ClassNotFoundException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
