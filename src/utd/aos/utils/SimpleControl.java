@@ -9,7 +9,7 @@ public class SimpleControl implements Serializable {
 	private static final long serialVersionUID = -5492385140694252853L;
 
 	public static enum Type {
-		DATA, REQUEST, COMMIT, AGREED, COMMIT_REQUEST, ACK
+		DATA, REQUEST, COMMIT, AGREED, COMMIT_REQUEST, ACK, TERM 
 	}
 	
 	private Type type;
